@@ -7,6 +7,8 @@ import { BookCreateInput } from "@/app/lib/types";
 
 const statuses = new Set(["Unread", "Reading", "Finished"]);
 type BookStatus = "Unread" | "Reading" | "Finished";
+const storages = new Set(["中野", "仙台", "電子"]);
+type Storage = "中野" | "仙台" | "電子";
 
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
@@ -19,6 +21,11 @@ function stringArray(value: unknown): string[] {
 function parseStatus(value: unknown): BookStatus {
   const status = String(value);
   return statuses.has(status) ? (status as BookStatus) : "Unread";
+}
+
+function parseStorage(value: unknown): Storage {
+  const storage = String(value);
+  return storages.has(storage) ? (storage as Storage) : "仙台";
 }
 
 export async function POST(request: Request) {
@@ -69,6 +76,7 @@ export async function POST(request: Request) {
       isbn,
       whyBought: String(body.whyBought ?? ""),
       tags: stringArray(body.tags),
+      storage: parseStorage(body.storage),
       status: parseStatus(body.status),
     });
 

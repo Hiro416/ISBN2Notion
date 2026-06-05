@@ -105,12 +105,27 @@ export async function createBookPage(input: BookCreateInput): Promise<{ url?: st
     Author: richText(input.authors.join(", ")),
     Category: richText(category),
     Cover: {
-      url: input.thumbnail || null,
+      files: input.thumbnail
+        ? [
+            {
+              name: "Cover",
+              type: "external",
+              external: {
+                url: input.thumbnail,
+              },
+            },
+          ]
+        : [],
     },
     ISBN: {
       number: isbnNumber(input.isbn),
     },
     Published: notionDate(input.publishedDate),
+    Storage: {
+      select: {
+        name: input.storage ?? "仙台",
+      },
+    },
     memo: richText(input.whyBought ?? ""),
     状態: {
       select: {

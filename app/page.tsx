@@ -5,10 +5,12 @@ import { barcodeToIsbn, isValidIsbn, normalizeIsbn } from "./lib/isbn";
 import { BookLookup } from "./lib/types";
 
 type Status = "Unread" | "Reading" | "Finished";
+type Storage = "中野" | "仙台" | "電子";
 
 type RegisterForm = {
   whyBought: string;
   tags: string;
+  storage: Storage;
   status: Status;
 };
 
@@ -18,6 +20,7 @@ type AuthState = "checking" | "authenticated" | "unauthenticated";
 const defaultForm: RegisterForm = {
   whyBought: "",
   tags: "",
+  storage: "仙台",
   status: "Unread",
 };
 
@@ -220,6 +223,7 @@ export default function Home() {
           isbn: normalizeIsbn(book.isbn),
           whyBought: form.whyBought,
           tags: splitList(form.tags),
+          storage: form.storage,
           status: form.status,
         }),
       });
@@ -427,6 +431,19 @@ export default function Home() {
                 <option value="Unread">Unread</option>
                 <option value="Reading">Reading</option>
                 <option value="Finished">Finished</option>
+              </select>
+            </label>
+
+            <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
+              Storage
+              <select
+                value={form.storage}
+                onChange={(event) => setForm((current) => ({ ...current, storage: event.target.value as Storage }))}
+                className="min-h-12 rounded-[8px] border border-[#cfd8cf] bg-white px-3 text-base font-normal outline-none focus:border-[#1f7a5f]"
+              >
+                <option value="中野">中野</option>
+                <option value="仙台">仙台</option>
+                <option value="電子">電子</option>
               </select>
             </label>
 
