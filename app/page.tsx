@@ -41,6 +41,7 @@ export default function Home() {
   const [detectedIsbn, setDetectedIsbn] = useState("");
   const [book, setBook] = useState<BookLookup | null>(null);
   const [form, setForm] = useState<RegisterForm>(defaultForm);
+  const [coverFailed, setCoverFailed] = useState(false);
   const [message, setMessage] = useState("ISBNを読む準備はできています。");
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
@@ -175,6 +176,7 @@ export default function Home() {
     try {
       setIsLookingUp(true);
       setBook(null);
+      setCoverFailed(false);
       setMessage("書誌情報を探しています。openBD、NDL、Google Booksを順番に見ています。");
 
       const response = await fetch("/api/lookup", {
@@ -190,6 +192,7 @@ export default function Home() {
       }
 
       setBook(data);
+      setCoverFailed(false);
       setIsbn(data.isbn);
       setMessage("登録前チェックです。買った理由やタグを少し足せます。");
     } catch {
@@ -367,8 +370,13 @@ export default function Home() {
         <section className="rounded-[8px] border border-[#e2e6df] bg-white p-4 shadow-sm">
           <div className="flex gap-4">
             <div className="grid h-36 w-24 shrink-0 place-items-center overflow-hidden rounded-[8px] border border-[#d8ded5] bg-[#eef3ec]">
-              {book.thumbnail ? (
-                <img src={book.thumbnail} alt="" className="h-full w-full object-cover" />
+              {book.thumbnail && !coverFailed ? (
+                <img
+                  src={book.thumbnail}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={() => setCoverFailed(true)}
+                />
               ) : (
                 <span className="px-2 text-center text-xs font-bold text-[#697066]">NO COVER</span>
               )}

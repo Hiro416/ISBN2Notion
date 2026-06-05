@@ -124,6 +124,42 @@ function normalizeListedIsbn(value: string, fallback: string): string {
   return normalized || fallback;
 }
 
+function isbn10ToIsbn13(isbn: string): string {
+  const body = `978${isbn.slice(0, 9)}`;
+  const sum = body
+    .split("")
+    .reduce((total, char, index) => total + Number(char) * (index % 2 === 0 ? 1 : 3), 0);
+  const checkDigit = (10 - (sum % 10)) % 10;
+
+  return `${body}${checkDigit}`;
+}
+
+function japaneseIsbn13(isbn: string): string {
+  const normalized = normalizeListedIsbn(isbn, "");
+
+  if (/^9784\d{9}$/.test(normalized)) {
+    return normalized;
+  }
+
+  if (/^4\d{8}[\dX]$/.test(normalized)) {
+    return isbn10ToIsbn13(normalized);
+  }
+
+  return "";
+}
+
+function hanmotoCoverUrl(isbn: string): string {
+  const isbn13 = japaneseIsbn13(isbn);
+  return isbn13 ? `https://img.hanmoto.com/bd/img/${isbn13}.jpg` : "";
+}
+
+function withCoverFallback(book: BookLookup): BookLookup {
+  return {
+    ...book,
+    thumbnail: book.thumbnail || hanmotoCoverUrl(book.isbn),
+  };
+}
+
 function formatOpenBdDate(value = ""): string {
   if (/^\d{8}$/.test(value)) {
     return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
@@ -171,14 +207,14 @@ async function lookupOpenBd(isbn: string): Promise<BookLookup | null> {
     return null;
   }
 
-  return {
+  return withCoverFallback({
     title: [summary.series, summary.title, summary.volume].filter(Boolean).join(" "),
     authors: openBdAuthors(book),
     publisher: summary.publisher ?? "",
     publishedDate: formatOpenBdDate(summary.pubdate),
     thumbnail: summary.cover ?? "",
     isbn: summary.isbn ?? isbn,
-  };
+  });
 }
 
 async function lookupNationalDietLibrary(isbn: string): Promise<BookLookup | null> {
@@ -203,14 +239,14 @@ async function lookupNationalDietLibrary(isbn: string): Promise<BookLookup | nul
     return null;
   }
 
-  return {
+  return withCoverFallback({
     title,
     authors: allXmlValues(item, "dc:creator"),
     publisher: firstXmlValue(item, "dc:publisher"),
     publishedDate: firstXmlValue(item, "dcterms:issued") || firstXmlValue(item, "dc:date"),
     thumbnail: "",
     isbn: normalizeListedIsbn(firstXmlValue(item, "dc:identifier"), isbn),
-  };
+  });
 }
 
 async function lookupGoogleBooks(isbn: string): Promise<BookLookup | null> {
@@ -230,7 +266,7 @@ async function lookupGoogleBooks(isbn: string): Promise<BookLookup | null> {
     return null;
   }
 
-  return {
+  return withCoverFallback({
     title: volume.title,
     authors: volume.authors ?? [],
     publisher: volume.publisher ?? "",
@@ -240,7 +276,7 @@ async function lookupGoogleBooks(isbn: string): Promise<BookLookup | null> {
       "https://",
     ),
     isbn: chooseGoogleIsbn(item, isbn),
-  };
+  });
 }
 
 async function lookupOpenLibrary(isbn: string): Promise<BookLookup | null> {
@@ -260,12 +296,12 @@ async function lookupOpenLibrary(isbn: string): Promise<BookLookup | null> {
     return null;
   }
 
-  return {
+  return withCoverFallback({
     title: book.title,
     authors: book.authors?.map((author) => author.name ?? "").filter(Boolean) ?? [],
     publisher: book.publishers?.[0]?.name ?? "",
     publishedDate: book.publish_date ?? "",
     thumbnail: book.cover?.large ?? book.cover?.medium ?? book.cover?.small ?? "",
     isbn: book.identifiers?.isbn_13?.[0] ?? book.identifiers?.isbn_10?.[0] ?? isbn,
-  };
+  });
 }
