@@ -1,5 +1,8 @@
 import { Client } from "@notionhq/client";
+import type { CreatePageParameters } from "@notionhq/client/build/src/api-endpoints";
 import { BookCreateInput } from "./types";
+
+type PageProperties = CreatePageParameters["properties"];
 
 function databaseId(): string {
   const id = process.env.NOTION_DATABASE_ID;
@@ -27,7 +30,7 @@ function notionClient(): Client {
   });
 }
 
-function richText(content: string) {
+function richText(content: string): PageProperties[string] {
   return {
     rich_text: content
       ? [
@@ -47,7 +50,7 @@ function isbnNumber(isbn: string): number {
   return Number(isbn);
 }
 
-function notionDate(value: string) {
+function notionDate(value: string): PageProperties[string] {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return { date: { start: value } };
   }
@@ -92,7 +95,7 @@ export async function findBookByIsbn(isbn: string): Promise<{ url?: string } | n
 export async function createBookPage(input: BookCreateInput): Promise<{ url?: string }> {
   const category = input.tags?.join(", ") ?? "";
 
-  const properties = {
+  const properties: PageProperties = {
     Title: {
       title: [
         {
@@ -109,7 +112,7 @@ export async function createBookPage(input: BookCreateInput): Promise<{ url?: st
         ? [
             {
               name: "Cover",
-              type: "external",
+              type: "external" as const,
               external: {
                 url: input.thumbnail,
               },
