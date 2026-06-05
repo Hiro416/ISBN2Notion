@@ -69,9 +69,7 @@ export async function POST(request: Request) {
       isbn,
       whyBought: String(body.whyBought ?? ""),
       tags: stringArray(body.tags),
-      relatedProject: stringArray(body.relatedProject),
       status: parseStatus(body.status),
-      rating: typeof body.rating === "number" ? body.rating : null,
     });
 
     return NextResponse.json({ ok: true, notionUrl: page.url });

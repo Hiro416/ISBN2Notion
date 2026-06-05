@@ -39,13 +39,33 @@ function richText(content: string) {
   };
 }
 
-function multiSelect(values: string[] = []) {
-  return {
-    multi_select: values
-      .map((value) => value.trim())
-      .filter(Boolean)
-      .map((name) => ({ name })),
-  };
+function isbnNumber(isbn: string): number {
+  if (!/^\d+$/.test(isbn)) {
+    throw new Error("NotionのISBNプロパティがnumber型のため、数字だけのISBNのみ登録できます。");
+  }
+
+  return Number(isbn);
+}
+
+function notionDate(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return { date: { start: value } };
+  }
+
+  if (/^\d{4}-\d{2}$/.test(value)) {
+    return { date: { start: `${value}-01` } };
+  }
+
+  if (/^\d{4}$/.test(value)) {
+    return { date: { start: `${value}-01-01` } };
+  }
+
+  if (/^\d{4}\.\d{1,2}$/.test(value)) {
+    const [year, month] = value.split(".");
+    return { date: { start: `${year}-${month.padStart(2, "0")}-01` } };
+  }
+
+  return { date: null };
 }
 
 export async function findBookByIsbn(isbn: string): Promise<{ url?: string } | null> {
@@ -53,8 +73,8 @@ export async function findBookByIsbn(isbn: string): Promise<{ url?: string } | n
     database_id: databaseId(),
     filter: {
       property: "ISBN",
-      rich_text: {
-        equals: isbn,
+      number: {
+        equals: isbnNumber(isbn),
       },
     },
     page_size: 1,
@@ -70,6 +90,8 @@ export async function findBookByIsbn(isbn: string): Promise<{ url?: string } | n
 }
 
 export async function createBookPage(input: BookCreateInput): Promise<{ url?: string }> {
+  const category = input.tags?.join(", ") ?? "";
+
   const properties = {
     Title: {
       title: [
@@ -80,23 +102,20 @@ export async function createBookPage(input: BookCreateInput): Promise<{ url?: st
         },
       ],
     },
-    Authors: richText(input.authors.join(", ")),
-    ISBN: richText(input.isbn),
-    Publisher: richText(input.publisher),
-    PublishedDate: richText(input.publishedDate),
-    Thumbnail: {
+    Author: richText(input.authors.join(", ")),
+    Category: richText(category),
+    Cover: {
       url: input.thumbnail || null,
     },
-    Status: {
+    ISBN: {
+      number: isbnNumber(input.isbn),
+    },
+    Published: notionDate(input.publishedDate),
+    memo: richText(input.whyBought ?? ""),
+    状態: {
       select: {
         name: input.status ?? "Unread",
       },
-    },
-    Tags: multiSelect(input.tags),
-    WhyBought: richText(input.whyBought ?? ""),
-    RelatedProject: multiSelect(input.relatedProject),
-    Rating: {
-      number: typeof input.rating === "number" ? input.rating : null,
     },
   };
 

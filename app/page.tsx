@@ -9,9 +9,7 @@ type Status = "Unread" | "Reading" | "Finished";
 type RegisterForm = {
   whyBought: string;
   tags: string;
-  relatedProject: string;
   status: Status;
-  rating: string;
 };
 
 type ScanState = "idle" | "starting" | "active" | "denied" | "unsupported";
@@ -20,9 +18,7 @@ type AuthState = "checking" | "authenticated" | "unauthenticated";
 const defaultForm: RegisterForm = {
   whyBought: "",
   tags: "",
-  relatedProject: "",
   status: "Unread",
-  rating: "",
 };
 
 function splitList(value: string): string[] {
@@ -224,9 +220,7 @@ export default function Home() {
           isbn: normalizeIsbn(book.isbn),
           whyBought: form.whyBought,
           tags: splitList(form.tags),
-          relatedProject: splitList(form.relatedProject),
           status: form.status,
-          rating: form.rating ? Number(form.rating) : null,
         }),
       });
       const data = await response.json();
@@ -403,7 +397,7 @@ export default function Home() {
 
           <div className="mt-5 grid gap-4">
             <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
-              WhyBought
+              memo
               <textarea
                 value={form.whyBought}
                 onChange={(event) => setForm((current) => ({ ...current, whyBought: event.target.value }))}
@@ -414,7 +408,7 @@ export default function Home() {
             </label>
 
             <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
-              Tags
+              Category
               <input
                 value={form.tags}
                 onChange={(event) => setForm((current) => ({ ...current, tags: event.target.value }))}
@@ -424,44 +418,17 @@ export default function Home() {
             </label>
 
             <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
-              RelatedProject
-              <input
-                value={form.relatedProject}
-                onChange={(event) => setForm((current) => ({ ...current, relatedProject: event.target.value }))}
-                placeholder="卒論, 診断推論, 積読回診"
-                className="min-h-12 rounded-[8px] border border-[#cfd8cf] px-3 text-base font-normal outline-none focus:border-[#1f7a5f] focus:ring-2 focus:ring-[#1f7a5f]/20"
-              />
+              状態
+              <select
+                value={form.status}
+                onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as Status }))}
+                className="min-h-12 rounded-[8px] border border-[#cfd8cf] bg-white px-3 text-base font-normal outline-none focus:border-[#1f7a5f]"
+              >
+                <option value="Unread">Unread</option>
+                <option value="Reading">Reading</option>
+                <option value="Finished">Finished</option>
+              </select>
             </label>
-
-            <div className="grid grid-cols-[1fr_7rem] gap-3">
-              <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
-                Status
-                <select
-                  value={form.status}
-                  onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as Status }))}
-                  className="min-h-12 rounded-[8px] border border-[#cfd8cf] bg-white px-3 text-base font-normal outline-none focus:border-[#1f7a5f]"
-                >
-                  <option value="Unread">Unread</option>
-                  <option value="Reading">Reading</option>
-                  <option value="Finished">Finished</option>
-                </select>
-              </label>
-
-              <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
-                Rating
-                <input
-                  type="number"
-                  value={form.rating}
-                  onChange={(event) => setForm((current) => ({ ...current, rating: event.target.value }))}
-                  inputMode="decimal"
-                  min="0"
-                  max="5"
-                  step="0.5"
-                  placeholder="0-5"
-                  className="min-h-12 rounded-[8px] border border-[#cfd8cf] px-3 text-base font-normal outline-none focus:border-[#1f7a5f]"
-                />
-              </label>
-            </div>
 
             <button
               type="button"

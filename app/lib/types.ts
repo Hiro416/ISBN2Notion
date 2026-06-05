@@ -10,7 +10,5 @@ export type BookLookup = {
 export type BookCreateInput = BookLookup & {
   whyBought?: string;
   tags?: string[];
-  relatedProject?: string[];
   status?: "Unread" | "Reading" | "Finished";
-  rating?: number | null;
 };
