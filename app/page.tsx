@@ -131,7 +131,15 @@ export default function Home() {
 
           const candidate = barcodeToIsbn(result.getText());
 
-          if (candidate === lastDetectedRef.current || !isValidIsbn(candidate)) {
+          if (candidate === lastDetectedRef.current) {
+            return;
+          }
+
+          if (!isValidIsbn(candidate)) {
+            if (candidate.startsWith("192")) {
+              setMessage("ISBNではなく価格コードを読んだようです。上側の978/979で始まるバーコードを狙ってください。");
+            }
+
             return;
           }
 
@@ -167,7 +175,7 @@ export default function Home() {
     try {
       setIsLookingUp(true);
       setBook(null);
-      setMessage("書誌情報を探しています。Google Booksから覗いて、なければOpen Libraryへ回ります。");
+      setMessage("書誌情報を探しています。openBD、NDL、Google Booksを順番に見ています。");
 
       const response = await fetch("/api/lookup", {
         method: "POST",

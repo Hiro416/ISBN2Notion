@@ -32,7 +32,7 @@ export async function POST(request: Request) {
 
     if (!book) {
       return NextResponse.json(
-        { ok: false, error: "書誌情報が見つかりませんでした。ISBNを確認して手入力してください。" },
+        { ok: false, error: "書誌情報が見つかりませんでした。ISBNを確認するか、タイトルだけ手入力してください。" },
         { status: 404 },
       );
     }

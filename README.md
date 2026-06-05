@@ -1,6 +1,6 @@
 # 謎蔵書クリニック
 
-iPhoneでISBNバーコードを読み取り、Google Books APIまたはOpen Library APIから書誌情報を取得して、Notion Databaseに登録する個人用PWAです。DBは持たず、Notionをそのまま蔵書DBとして使います。
+iPhoneでISBNバーコードを読み取り、openBD、国立国会図書館サーチ、Google Books API、Open Library APIから書誌情報を取得して、Notion Databaseに登録する個人用PWAです。DBは持たず、Notionをそのまま蔵書DBとして使います。
 
 ## 構成
 
@@ -8,7 +8,7 @@ iPhoneでISBNバーコードを読み取り、Google Books APIまたはOpen Libr
 - TypeScript
 - Tailwind CSS
 - `@zxing/browser` によるバーコード読み取り
-- Google Books API、Open Library API
+- openBD、国立国会図書館サーチ、Google Books API、Open Library API
 - Notion API
 - Railwayデプロイ想定
 
@@ -100,7 +100,7 @@ Input:
 { "isbn": "978..." }
 ```
 
-Google Books APIで検索し、見つからない場合はOpen Library APIを試します。
+openBDで検索し、見つからない場合は国立国会図書館サーチ、Google Books API、Open Library APIの順に試します。日本語の商業出版物はopenBDと国立国会図書館サーチで見つかることが多いです。
 
 Output:
 

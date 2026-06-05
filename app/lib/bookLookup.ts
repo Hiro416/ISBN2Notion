@@ -33,6 +33,31 @@ type OpenLibraryBook = {
   };
 };
 
+type OpenBdBook = {
+  summary?: {
+    isbn?: string;
+    title?: string;
+    volume?: string;
+    series?: string;
+    publisher?: string;
+    pubdate?: string;
+    cover?: string;
+    author?: string;
+  };
+  onix?: {
+    DescriptiveDetail?: {
+      Contributor?: Array<{
+        PersonName?: {
+          content?: string;
+        };
+        PersonNameInverted?: {
+          content?: string;
+        };
+      }>;
+    };
+  };
+};
+
 function chooseGoogleIsbn(item: GoogleBookItem, fallback: string): string {
   const identifiers = item.volumeInfo?.industryIdentifiers ?? [];
   return (
@@ -43,6 +68,18 @@ function chooseGoogleIsbn(item: GoogleBookItem, fallback: string): string {
 }
 
 export async function lookupBook(isbn: string): Promise<BookLookup | null> {
+  const openBdBook = await lookupOpenBd(isbn);
+
+  if (openBdBook) {
+    return openBdBook;
+  }
+
+  const ndlBook = await lookupNationalDietLibrary(isbn);
+
+  if (ndlBook) {
+    return ndlBook;
+  }
+
   const googleBook = await lookupGoogleBooks(isbn);
 
   if (googleBook) {
@@ -50,6 +87,130 @@ export async function lookupBook(isbn: string): Promise<BookLookup | null> {
   }
 
   return lookupOpenLibrary(isbn);
+}
+
+function decodeXml(value: string): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .trim();
+}
+
+function stripTags(value: string): string {
+  return value.replace(/<[^>]*>/g, "").trim();
+}
+
+function firstXmlValue(xml: string, tagName: string): string {
+  const escapedTagName = tagName.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+  const match = xml.match(new RegExp(`<${escapedTagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escapedTagName}>`));
+  return match ? stripTags(decodeXml(match[1])) : "";
+}
+
+function allXmlValues(xml: string, tagName: string): string[] {
+  const escapedTagName = tagName.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+  const matches = xml.matchAll(new RegExp(`<${escapedTagName}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${escapedTagName}>`, "g"));
+
+  return Array.from(matches)
+    .map((match) => stripTags(decodeXml(match[1])))
+    .filter(Boolean);
+}
+
+function normalizeListedIsbn(value: string, fallback: string): string {
+  const normalized = value.replace(/[^0-9Xx]/g, "").toUpperCase();
+  return normalized || fallback;
+}
+
+function formatOpenBdDate(value = ""): string {
+  if (/^\d{8}$/.test(value)) {
+    return `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  }
+
+  if (/^\d{6}$/.test(value)) {
+    return `${value.slice(0, 4)}-${value.slice(4, 6)}`;
+  }
+
+  return value;
+}
+
+function openBdAuthors(book: OpenBdBook): string[] {
+  const contributors =
+    book.onix?.DescriptiveDetail?.Contributor?.map(
+      (contributor) => contributor.PersonName?.content ?? contributor.PersonNameInverted?.content ?? "",
+    ).filter(Boolean) ?? [];
+
+  if (contributors.length > 0) {
+    return contributors;
+  }
+
+  return (
+    book.summary?.author
+      ?.split(/[、,／/]/)
+      .map((author) => author.trim())
+      .filter(Boolean) ?? []
+  );
+}
+
+async function lookupOpenBd(isbn: string): Promise<BookLookup | null> {
+  const response = await fetch(`https://api.openbd.jp/v1/get?isbn=${isbn}`, {
+    next: { revalidate: 86400 },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as Array<OpenBdBook | null>;
+  const book = data[0];
+  const summary = book?.summary;
+
+  if (!book || !summary?.title) {
+    return null;
+  }
+
+  return {
+    title: [summary.series, summary.title, summary.volume].filter(Boolean).join(" "),
+    authors: openBdAuthors(book),
+    publisher: summary.publisher ?? "",
+    publishedDate: formatOpenBdDate(summary.pubdate),
+    thumbnail: summary.cover ?? "",
+    isbn: summary.isbn ?? isbn,
+  };
+}
+
+async function lookupNationalDietLibrary(isbn: string): Promise<BookLookup | null> {
+  const response = await fetch(`https://ndlsearch.ndl.go.jp/api/opensearch?isbn=${isbn}`, {
+    next: { revalidate: 86400 },
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const xml = await response.text();
+  const item = xml.match(/<item>[\s\S]*?<\/item>/)?.[0];
+
+  if (!item) {
+    return null;
+  }
+
+  const title = firstXmlValue(item, "dc:title") || firstXmlValue(item, "title");
+
+  if (!title) {
+    return null;
+  }
+
+  return {
+    title,
+    authors: allXmlValues(item, "dc:creator"),
+    publisher: firstXmlValue(item, "dc:publisher"),
+    publishedDate: firstXmlValue(item, "dcterms:issued") || firstXmlValue(item, "dc:date"),
+    thumbnail: "",
+    isbn: normalizeListedIsbn(firstXmlValue(item, "dc:identifier"), isbn),
+  };
 }
 
 async function lookupGoogleBooks(isbn: string): Promise<BookLookup | null> {
