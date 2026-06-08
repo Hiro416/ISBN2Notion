@@ -1,4 +1,4 @@
-# 謎蔵書クリニック
+# ISBN2Notion
 
 iPhoneでISBNバーコードを読み取り、openBD、国立国会図書館サーチ、Google Books API、Open Library APIから書誌情報を取得して、Notion Databaseに登録する個人用PWAです。DBは持たず、Notionをそのまま蔵書DBとして使います。国内ISBNの書影は版元ドットコムの画像URLもフォールバックに使います。
 

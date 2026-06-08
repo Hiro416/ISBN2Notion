@@ -31,8 +31,21 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
+function emptyBook(): BookLookup {
+  return {
+    title: "",
+    authors: [],
+    publisher: "",
+    publishedDate: "",
+    thumbnail: "",
+    isbn: "",
+  };
+}
+
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const isbnInputRef = useRef<HTMLInputElement | null>(null);
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const controlsRef = useRef<{ stop: () => void } | null>(null);
   const lastDetectedRef = useRef("");
   const [scanState, setScanState] = useState<ScanState>("idle");
@@ -46,7 +59,7 @@ export default function Home() {
   const [isRegistering, setIsRegistering] = useState(false);
   const [authState, setAuthState] = useState<AuthState>("checking");
   const [password, setPassword] = useState("");
-  const [loginMessage, setLoginMessage] = useState("合言葉を入れると蔵書カルテを開けます。");
+  const [loginMessage, setLoginMessage] = useState("合言葉を入れると登録画面を開けます。");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const normalizedIsbn = useMemo(() => normalizeIsbn(isbn), [isbn]);
@@ -164,6 +177,24 @@ export default function Home() {
     setMessage("カメラを停止しました。");
   }
 
+  function startNewBook() {
+    setBook(emptyBook());
+    setIsbn("");
+    setDetectedIsbn("");
+    setForm(defaultForm);
+    setCoverFailed(false);
+    lastDetectedRef.current = "";
+    setMessage("書誌情報を手入力して登録できます。ISBNは数字だけで入力してください。");
+    requestAnimationFrame(() => {
+      titleInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      titleInputRef.current?.focus();
+    });
+  }
+
+  function updateBook<K extends keyof BookLookup>(key: K, value: BookLookup[K]) {
+    setBook((current) => (current ? { ...current, [key]: value } : current));
+  }
+
   async function lookup(targetIsbn = normalizedIsbn) {
     const cleanIsbn = normalizeIsbn(targetIsbn);
 
@@ -211,6 +242,16 @@ export default function Home() {
       return;
     }
 
+    if (!book.title.trim()) {
+      setMessage("タイトルを入力してください。");
+      return;
+    }
+
+    if (!isValidIsbn(book.isbn)) {
+      setMessage("ISBNの形式が正しくありません。ISBN-10またはISBN-13を入力してください。");
+      return;
+    }
+
     try {
       setIsRegistering(true);
       setMessage("Notionに登録しています。");
@@ -237,7 +278,7 @@ export default function Home() {
       setMessage(
         data.duplicate
           ? "既に登録済みです。Notionの同じページを見つけました。"
-          : "登録しました。謎蔵書がまた一冊、観察対象になりました。",
+          : "登録しました。Notionに本を追加しました。",
       );
 
       if (!data.duplicate) {
@@ -256,10 +297,10 @@ export default function Home() {
     return (
       <main className="mx-auto grid min-h-dvh w-full max-w-md content-center px-4 py-8">
         <section className="rounded-[8px] border border-[#e2e6df] bg-white p-5 shadow-sm">
-          <p className="text-sm font-bold text-[#1f7a5f]">Private Library Gate</p>
-          <h1 className="mt-2 text-3xl font-black leading-tight text-[#20231f]">謎蔵書クリニック</h1>
+          <p className="text-sm font-bold text-[#1f7a5f]">Private Library</p>
+          <h1 className="mt-2 text-3xl font-black leading-tight text-[#20231f]">ISBN2Notion</h1>
           <p className="mt-3 text-sm leading-6 text-[#697066]">
-            {authState === "checking" ? "蔵書カルテを確認しています。" : loginMessage}
+            {authState === "checking" ? "ログイン状態を確認しています。" : loginMessage}
           </p>
 
           {authState === "unauthenticated" ? (
@@ -292,15 +333,20 @@ export default function Home() {
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col gap-5 px-4 py-5 sm:py-8">
       <header className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-bold text-[#1f7a5f]">Medical Mystery Library</p>
-          <h1 className="mt-1 text-3xl font-black leading-tight text-[#20231f]">謎蔵書クリニック</h1>
+          <p className="text-sm font-bold text-[#1f7a5f]">Personal Library PWA</p>
+          <h1 className="mt-1 text-3xl font-black leading-tight text-[#20231f]">ISBN2Notion</h1>
         </div>
-        <div className="grid h-14 w-14 place-items-center rounded-[8px] border border-[#d8ded5] bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={startNewBook}
+          aria-label="新しい本を登録"
+          title="新しい本を登録"
+          className="grid h-14 w-14 place-items-center rounded-[8px] border border-[#d8ded5] bg-white shadow-sm active:scale-[0.98]"
+        >
           <span className="text-2xl" aria-hidden="true">
             +
           </span>
-          <span className="sr-only">蔵書登録</span>
-        </div>
+        </button>
       </header>
 
       <section className="rounded-[8px] border border-[#e2e6df] bg-white p-4 shadow-sm">
@@ -346,6 +392,7 @@ export default function Home() {
         </label>
         <div className="mt-2 flex gap-2">
           <input
+            ref={isbnInputRef}
             id="isbn"
             value={isbn}
             onChange={(event) => setIsbn(event.target.value)}
@@ -366,7 +413,7 @@ export default function Home() {
 
       {book ? (
         <section className="rounded-[8px] border border-[#e2e6df] bg-white p-4 shadow-sm">
-          <div className="flex gap-4">
+          <div className="grid gap-4">
             <div className="grid h-36 w-24 shrink-0 place-items-center overflow-hidden rounded-[8px] border border-[#d8ded5] bg-[#eef3ec]">
               {book.thumbnail && !coverFailed ? (
                 <img
@@ -379,27 +426,73 @@ export default function Home() {
                 <span className="px-2 text-center text-xs font-bold text-[#697066]">NO COVER</span>
               )}
             </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="break-words text-xl font-black leading-snug">{book.title}</h2>
-              <p className="mt-2 text-sm text-[#697066]">{book.authors.join(", ") || "著者不明"}</p>
-              <dl className="mt-3 grid gap-1 text-sm text-[#3d453b]">
-                <div>
-                  <dt className="inline font-bold">出版社: </dt>
-                  <dd className="inline">{book.publisher || "不明"}</dd>
-                </div>
-                <div>
-                  <dt className="inline font-bold">出版日: </dt>
-                  <dd className="inline">{book.publishedDate || "不明"}</dd>
-                </div>
-                <div>
-                  <dt className="inline font-bold">ISBN: </dt>
-                  <dd className="inline">{book.isbn}</dd>
-                </div>
-              </dl>
-            </div>
-          </div>
 
-          <div className="mt-5 grid gap-4">
+            <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
+              Title
+              <input
+                ref={titleInputRef}
+                value={book.title}
+                onChange={(event) => updateBook("title", event.target.value)}
+                className="min-h-12 rounded-[8px] border border-[#cfd8cf] px-3 text-base font-normal outline-none focus:border-[#1f7a5f] focus:ring-2 focus:ring-[#1f7a5f]/20"
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
+              Author
+              <input
+                value={book.authors.join(", ")}
+                onChange={(event) => updateBook("authors", splitList(event.target.value))}
+                placeholder="著者, 訳者"
+                className="min-h-12 rounded-[8px] border border-[#cfd8cf] px-3 text-base font-normal outline-none focus:border-[#1f7a5f] focus:ring-2 focus:ring-[#1f7a5f]/20"
+              />
+            </label>
+
+            <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
+              Cover
+              <input
+                value={book.thumbnail}
+                onChange={(event) => {
+                  updateBook("thumbnail", event.target.value);
+                  setCoverFailed(false);
+                }}
+                inputMode="url"
+                placeholder="https://..."
+                className="min-h-12 rounded-[8px] border border-[#cfd8cf] px-3 text-base font-normal outline-none focus:border-[#1f7a5f] focus:ring-2 focus:ring-[#1f7a5f]/20"
+              />
+            </label>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
+                Published
+                <input
+                  value={book.publishedDate}
+                  onChange={(event) => updateBook("publishedDate", event.target.value)}
+                  placeholder="2026-06-08"
+                  className="min-h-12 rounded-[8px] border border-[#cfd8cf] px-3 text-base font-normal outline-none focus:border-[#1f7a5f] focus:ring-2 focus:ring-[#1f7a5f]/20"
+                />
+              </label>
+
+              <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
+                ISBN
+                <input
+                  value={book.isbn}
+                  onChange={(event) => updateBook("isbn", normalizeIsbn(event.target.value))}
+                  inputMode="text"
+                  placeholder="978..."
+                  className="min-h-12 rounded-[8px] border border-[#cfd8cf] px-3 text-base font-normal outline-none focus:border-[#1f7a5f] focus:ring-2 focus:ring-[#1f7a5f]/20"
+                />
+              </label>
+            </div>
+
+            <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
+              Publisher
+              <input
+                value={book.publisher}
+                onChange={(event) => updateBook("publisher", event.target.value)}
+                className="min-h-12 rounded-[8px] border border-[#cfd8cf] px-3 text-base font-normal outline-none focus:border-[#1f7a5f] focus:ring-2 focus:ring-[#1f7a5f]/20"
+              />
+            </label>
+
             <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
               memo
               <textarea

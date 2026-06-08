@@ -1,6 +1,6 @@
 {
-  "name": "謎蔵書クリニック",
-  "short_name": "謎蔵書",
+  "name": "ISBN2Notion",
+  "short_name": "ISBN2Notion",
   "description": "ISBNバーコードからNotionへ本を登録する個人用PWA",
   "start_url": "/",
   "display": "standalone",

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "謎蔵書クリニック",
+  title: "ISBN2Notion",
   description: "ISBNバーコードからNotionへ本を登録する個人用PWA",
   manifest: "/manifest.json",
   icons: {
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "謎蔵書",
+    title: "ISBN2Notion",
     statusBarStyle: "default",
   },
 };
