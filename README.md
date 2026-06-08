@@ -188,9 +188,18 @@ Output:
       "duplicate": false
     }
   ],
-  "skipped": []
+  "skipped": [],
+  "ai": {
+    "used": true,
+    "model": "gpt-4.1-mini",
+    "responseId": "resp_...",
+    "skippedReason": "",
+    "extractedDrafts": 1
+  }
 }
 ```
+
+`ai.used` が `false` の場合はOpenAI APIを呼んでいません。多くの場合、Railwayに `OPENAI_API_KEY` が設定されていない状態です。`ai.responseId` が返っていればOpenAI Responses APIの呼び出しが発生しています。
 
 Notionの `ISBN` がnumber型で既存の重複判定にも使われるため、有効なISBNがメール内に見つからない本は自動登録せず `skipped` に返します。AIにはISBNを推測させない設定にしています。
 

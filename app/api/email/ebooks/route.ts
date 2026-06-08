@@ -216,8 +216,8 @@ export async function POST(request: Request) {
 
     const rawEmail = emailText(email);
     const isbns = findIsbns(rawEmail);
-    const aiDrafts = await extractEbookEmailWithAi(email);
-    const drafts = mergeDrafts(aiDrafts, isbns);
+    const aiExtraction = await extractEbookEmailWithAi(email);
+    const drafts = mergeDrafts(aiExtraction.drafts, isbns);
     const registered: RegisteredBook[] = [];
     const skipped: SkippedBook[] = [];
 
@@ -271,6 +271,13 @@ export async function POST(request: Request) {
       ok: true,
       registered,
       skipped,
+      ai: {
+        used: aiExtraction.used,
+        model: aiExtraction.model,
+        responseId: aiExtraction.responseId,
+        skippedReason: aiExtraction.skippedReason,
+        extractedDrafts: aiExtraction.drafts.length,
+      },
       message:
         registered.length > 0
           ? `${registered.length}件の電子書籍をNotionに反映しました。`

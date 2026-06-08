@@ -10,6 +10,7 @@ export type EbookEmailInput = {
 };
 
 type ResponsesApiOutput = {
+  id?: string;
   output_text?: string;
   output?: Array<{
     content?: Array<{
@@ -21,6 +22,14 @@ type ResponsesApiOutput = {
 
 type EbookEmailExtraction = {
   books: EbookEmailBookDraft[];
+};
+
+export type EbookEmailAiExtractionResult = {
+  drafts: EbookEmailBookDraft[];
+  used: boolean;
+  model: string;
+  responseId: string;
+  skippedReason: string;
 };
 
 const emptyExtraction: EbookEmailExtraction = { books: [] };
@@ -95,12 +104,26 @@ function parseResponsesText(data: ResponsesApiOutput): string {
   );
 }
 
-export async function extractEbookEmailWithAi(input: EbookEmailInput): Promise<EbookEmailBookDraft[]> {
+export async function extractEbookEmailWithAi(input: EbookEmailInput): Promise<EbookEmailAiExtractionResult> {
   const apiKey = process.env.OPENAI_API_KEY;
+  const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
 
   if (!apiKey) {
-    return [];
+    return {
+      drafts: [],
+      used: false,
+      model,
+      responseId: "",
+      skippedReason: "OPENAI_API_KEY is not set.",
+    };
   }
+
+  console.info("ebook email AI extraction started", {
+    model,
+    subjectLength: input.subject.length,
+    textLength: input.text.length,
+    htmlLength: input.html.length,
+  });
 
   const response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -109,7 +132,7 @@ export async function extractEbookEmailWithAi(input: EbookEmailInput): Promise<E
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
+      model,
       instructions:
         "You extract purchased ebook details from forwarded purchase confirmation emails. Return only facts that are present in the email. Do not guess ISBNs. If an ISBN is not present, leave it empty. Tags should be short Japanese or English category labels inferred from explicit title/context.",
       input: emailText(input).slice(0, 20000),
@@ -162,13 +185,27 @@ export async function extractEbookEmailWithAi(input: EbookEmailInput): Promise<E
   });
 
   if (!response.ok) {
-    throw new Error("OpenAIによるメール抽出に失敗しました。");
+    const errorBody = await response.text();
+    throw new Error(`OpenAIによるメール抽出に失敗しました。status=${response.status} ${errorBody.slice(0, 500)}`);
   }
 
   const data = (await response.json()) as ResponsesApiOutput;
   const parsed = JSON.parse(parseResponsesText(data) || JSON.stringify(emptyExtraction)) as EbookEmailExtraction;
+  const drafts = parsed.books.map(sanitizeDraft).filter((book) => book.title || book.isbn);
 
-  return parsed.books.map(sanitizeDraft).filter((book) => book.title || book.isbn);
+  console.info("ebook email AI extraction completed", {
+    model,
+    responseId: data.id ?? "",
+    drafts: drafts.length,
+  });
+
+  return {
+    drafts,
+    used: true,
+    model,
+    responseId: data.id ?? "",
+    skippedReason: "",
+  };
 }
 
 export function draftFromIsbn(isbn: string): EbookEmailBookDraft {
