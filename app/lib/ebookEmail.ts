@@ -4,6 +4,7 @@ import { EbookEmailBookDraft } from "./types";
 export type EbookEmailInput = {
   subject: string;
   from: string;
+  forwardedBy: string;
   text: string;
   html: string;
 };
@@ -45,7 +46,9 @@ function stripHtml(html: string): string {
 export function emailText(input: EbookEmailInput): string {
   const body = input.text.trim() || stripHtml(input.html);
 
-  return [`Subject: ${input.subject}`, `From: ${input.from}`, "", body].join("\n").trim();
+  return [`Subject: ${input.subject}`, `From: ${input.from}`, `Forwarded-By: ${input.forwardedBy}`, "", body]
+    .join("\n")
+    .trim();
 }
 
 export function findIsbns(value: string): string[] {

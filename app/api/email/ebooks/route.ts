@@ -19,6 +19,10 @@ type IncomingEmailBody = {
   subject?: unknown;
   from?: unknown;
   sender?: unknown;
+  forwardedBy?: unknown;
+  forwarded_by?: unknown;
+  relayFrom?: unknown;
+  relay_from?: unknown;
   text?: unknown;
   body?: unknown;
   html?: unknown;
@@ -96,27 +100,31 @@ function requireAllowedSender(email: EbookEmailInput): NextResponse | null {
     return null;
   }
 
-  const from = normalizeEmailAddress(email.from);
+  const forwardedBy = normalizeEmailAddress(email.forwardedBy);
 
-  if (allowed.includes(from)) {
+  if (forwardedBy && allowed.includes(forwardedBy)) {
     return null;
   }
 
   return NextResponse.json(
-    { ok: false, error: "許可されていないメールアドレスからの転送です。", from },
+    { ok: false, error: "許可されていないメールアドレスからの転送です。", forwardedBy },
     { status: 403 },
   );
 }
 
 async function parseEmailInput(request: Request): Promise<EbookEmailInput> {
   const contentType = request.headers.get("content-type") ?? "";
+  const headerForwardedBy = request.headers.get("x-ebook-forwarded-by") ?? "";
 
   if (contentType.includes("application/json")) {
     const body = (await request.json()) as IncomingEmailBody;
+    const forwardedBy =
+      body.forwardedBy ?? body.forwarded_by ?? body.relayFrom ?? body.relay_from ?? headerForwardedBy;
 
     return {
       subject: String(body.subject ?? ""),
       from: String(body.from ?? body.sender ?? ""),
+      forwardedBy: String(forwardedBy ?? ""),
       text: String(body.text ?? body.body ?? ""),
       html: String(body.html ?? ""),
     };
@@ -127,6 +135,13 @@ async function parseEmailInput(request: Request): Promise<EbookEmailInput> {
   return {
     subject: String(form.get("subject") ?? ""),
     from: String(form.get("from") ?? form.get("sender") ?? ""),
+    forwardedBy: String(
+      form.get("forwardedBy") ??
+        form.get("forwarded_by") ??
+        form.get("relayFrom") ??
+        form.get("relay_from") ??
+        headerForwardedBy,
+    ),
     text: String(form.get("text") ?? form.get("body-plain") ?? form.get("body") ?? ""),
     html: String(form.get("html") ?? form.get("body-html") ?? ""),
   };
