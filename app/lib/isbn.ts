@@ -34,6 +34,26 @@ export function isValidIsbn(value: string): boolean {
   return isValidIsbn10(isbn) || isValidIsbn13(isbn);
 }
 
+export function isbnForNotion(value: string): string {
+  const isbn = normalizeIsbn(value);
+
+  if (isValidIsbn13(isbn)) {
+    return isbn;
+  }
+
+  if (!isValidIsbn10(isbn)) {
+    return isbn;
+  }
+
+  const body = `978${isbn.slice(0, 9)}`;
+  const sum = body
+    .split("")
+    .reduce((total, char, index) => total + Number(char) * (index % 2 === 0 ? 1 : 3), 0);
+  const checkDigit = (10 - (sum % 10)) % 10;
+
+  return `${body}${checkDigit}`;
+}
+
 export function barcodeToIsbn(value: string): string {
   const normalized = normalizeIsbn(value);
 

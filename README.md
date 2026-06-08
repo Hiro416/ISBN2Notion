@@ -57,10 +57,16 @@ cp .env.example .env
 NOTION_TOKEN=
 NOTION_DATABASE_ID=
 BOOKS_APP_PASSWORD=
+EBOOK_EMAIL_INGEST_TOKEN=
+EBOOK_EMAIL_ALLOWED_SENDERS=
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4.1-mini
 ```
 
 重要: Notionトークンに `NEXT_PUBLIC_` を付けないでください。ブラウザ側へ出してはいけません。
 `BOOKS_APP_PASSWORD` はアプリを開くための合言葉です。iPhoneで初回アクセス時に入力すると、HTTPOnly Cookieでログイン状態を保持します。
+`EBOOK_EMAIL_INGEST_TOKEN` は購入確認メール転送用APIだけで使う長いランダム文字列です。`OPENAI_API_KEY` を設定すると、転送メール本文からタイトル、著者、購入元、購入日、タグなどをJSONで抽出します。`OPENAI_API_KEY` が未設定の場合も、メール内にISBNがあれば既存の書誌検索で登録できます。
+`EBOOK_EMAIL_ALLOWED_SENDERS` は転送を許可するメールアドレスのカンマ区切りリストです。空の場合はトークンのみで認証します。
 
 ## ローカル起動
 
@@ -135,12 +141,65 @@ Input:
 
 登録前にNotion DatabaseをISBNでqueryします。同じISBNが既にあれば新規作成せず、成功レスポンスとして `duplicate: true` を返します。
 
+### `POST /api/email/ebooks`
+
+電子書籍の購入確認メールを転送サービスから受け取り、本文から書籍情報を抽出してNotionに登録します。登録時の `Storage` は自動で `電子`、`状態` は `Unread` になります。
+
+認証はCookieログインではなく、メール転送サービス用のBearerトークンを使います。
+必要に応じて `EBOOK_EMAIL_ALLOWED_SENDERS=me@example.com,forwarder@example.com` のように設定すると、許可した転送元メールアドレス以外は本文解析前に拒否します。
+
+```http
+POST /api/email/ebooks
+Authorization: Bearer long-random-token
+Content-Type: application/json
+```
+
+Input:
+
+```json
+{
+  "subject": "ご注文の確認",
+  "from": "store@example.com",
+  "text": "購入確認メール本文",
+  "html": "<html>...</html>"
+}
+```
+
+フォームPOSTにも対応しています。`subject`, `from`, `text`, `html` のほか、Mailgun系の `body-plain`, `body-html` も受け取れます。
+
+運用例:
+
+1. 電子書籍登録用の専用メールアドレスをメール転送サービスで作ります。
+2. そのアドレス宛の受信イベントを `/api/email/ebooks` へのPOSTに変換します。
+3. 転送サービス側に `Authorization: Bearer <EBOOK_EMAIL_INGEST_TOKEN>` を設定します。
+4. 自分の転送元だけを受け入れる場合は `EBOOK_EMAIL_ALLOWED_SENDERS` に許可するメールアドレスを設定します。
+
+Output:
+
+```json
+{
+  "ok": true,
+  "registered": [
+    {
+      "title": "Book title",
+      "isbn": "978...",
+      "notionUrl": "https://www.notion.so/...",
+      "duplicate": false
+    }
+  ],
+  "skipped": []
+}
+```
+
+Notionの `ISBN` がnumber型で既存の重複判定にも使われるため、有効なISBNがメール内に見つからない本は自動登録せず `skipped` に返します。AIにはISBNを推測させない設定にしています。
+
 ## セキュリティ
 
 - フロントエンドはISBNと登録内容だけをAPIへ送ります。
 - Notion API呼び出しは必ずサーバー側Route Handlerから行います。
 - `NOTION_TOKEN` と `NOTION_DATABASE_ID` は `.env` またはRailway Variablesに置きます。
 - `BOOKS_APP_PASSWORD` でログインした端末だけが `/api/lookup` と `/api/books` を使えます。
+- `/api/email/ebooks` は `EBOOK_EMAIL_INGEST_TOKEN` のBearer認証で保護します。メール転送サービスにはこのトークンを設定してください。`EBOOK_EMAIL_ALLOWED_SENDERS` を設定すると、許可した転送元だけを処理します。
 - ログイン状態はHTTPOnly Cookieで管理します。JavaScriptからCookie値は読めません。
 - APIには簡易レート制限を入れています。ただしアプリ内レート制限はRailwayインスタンス単位の防御であり、大規模なDDoS対策はCloudflareなどの前段で行ってください。
 - Notionトークンに `NEXT_PUBLIC_` を付けないでください。
