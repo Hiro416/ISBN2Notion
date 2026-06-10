@@ -1,6 +1,7 @@
 import { Client } from "@notionhq/client";
 import type { CreatePageParameters } from "@notionhq/client/build/src/api-endpoints";
 import { BookCreateInput } from "./types";
+import type { NotionConnection } from "./notionOAuth";
 
 type RichTextProperty = {
   rich_text: Array<{
@@ -46,8 +47,8 @@ type LocalPageProperties = Record<
     }
 >;
 
-function databaseId(): string {
-  const id = process.env.NOTION_DATABASE_ID;
+function databaseId(connection?: NotionConnection): string {
+  const id = connection?.databaseId || process.env.NOTION_DATABASE_ID;
 
   if (!id) {
     throw new Error("NOTION_DATABASE_ID が設定されていません。");
@@ -56,8 +57,8 @@ function databaseId(): string {
   return id;
 }
 
-function notionToken(): string {
-  const token = process.env.NOTION_TOKEN;
+function notionToken(connection?: NotionConnection): string {
+  const token = connection?.accessToken || process.env.NOTION_TOKEN;
 
   if (!token) {
     throw new Error("NOTION_TOKEN が設定されていません。");
@@ -66,9 +67,9 @@ function notionToken(): string {
   return token;
 }
 
-function notionClient(): Client {
+function notionClient(connection?: NotionConnection): Client {
   return new Client({
-    auth: notionToken(),
+    auth: notionToken(connection),
   });
 }
 
@@ -113,9 +114,9 @@ function notionDate(value: string): DateProperty {
   return { date: null };
 }
 
-export async function findBookByIsbn(isbn: string): Promise<{ url?: string } | null> {
-  const result = await notionClient().databases.query({
-    database_id: databaseId(),
+export async function findBookByIsbn(isbn: string, connection?: NotionConnection): Promise<{ url?: string } | null> {
+  const result = await notionClient(connection).databases.query({
+    database_id: databaseId(connection),
     filter: {
       property: "ISBN",
       number: {
@@ -134,7 +135,7 @@ export async function findBookByIsbn(isbn: string): Promise<{ url?: string } | n
   return { url: page.url };
 }
 
-export async function createBookPage(input: BookCreateInput): Promise<{ url?: string }> {
+export async function createBookPage(input: BookCreateInput, connection?: NotionConnection): Promise<{ url?: string }> {
   const category = input.tags?.join(", ") ?? "";
 
   const properties: LocalPageProperties = {
@@ -179,9 +180,9 @@ export async function createBookPage(input: BookCreateInput): Promise<{ url?: st
     },
   };
 
-  const page = await notionClient().pages.create({
+  const page = await notionClient(connection).pages.create({
     parent: {
-      database_id: databaseId(),
+      database_id: databaseId(connection),
     },
     properties: properties as unknown as CreatePageParameters["properties"],
   });

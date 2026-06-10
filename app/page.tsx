@@ -16,6 +16,7 @@ type RegisterForm = {
 
 type ScanState = "idle" | "starting" | "active" | "denied" | "unsupported";
 type AuthState = "checking" | "authenticated" | "unauthenticated";
+type NotionConnectionState = "checking" | "connected" | "disconnected";
 
 const defaultForm: RegisterForm = {
   whyBought: "",
@@ -61,9 +62,15 @@ export default function Home() {
   const [password, setPassword] = useState("");
   const [loginMessage, setLoginMessage] = useState("合言葉を入れると登録画面を開けます。");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [notionConnectionState, setNotionConnectionState] = useState<NotionConnectionState>("checking");
+  const [notionDatabaseId, setNotionDatabaseId] = useState("");
+  const [notionWorkspaceName, setNotionWorkspaceName] = useState("");
+  const [notionMessage, setNotionMessage] = useState("Notion Database IDを入れて接続してください。");
+  const [isDisconnectingNotion, setIsDisconnectingNotion] = useState(false);
 
   const normalizedIsbn = useMemo(() => normalizeIsbn(isbn), [isbn]);
   const canLookup = isValidIsbn(normalizedIsbn) && !isLookingUp;
+  const canRegister = notionConnectionState === "connected" && !isRegistering;
 
   useEffect(() => {
     return () => controlsRef.current?.stop();
@@ -82,6 +89,47 @@ export default function Home() {
 
     void checkSession();
   }, []);
+
+  useEffect(() => {
+    if (authState !== "authenticated") {
+      return;
+    }
+
+    async function checkNotionConnection() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const oauthMessage = params.get("message");
+
+        if (oauthMessage) {
+          setNotionMessage(oauthMessage);
+          window.history.replaceState({}, "", window.location.pathname);
+        }
+
+        const response = await fetch("/api/notion/connection", { cache: "no-store" });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setNotionConnectionState("disconnected");
+          setNotionMessage(data.error ?? "Notion接続を確認できませんでした。");
+          return;
+        }
+
+        setNotionConnectionState(data.connected ? "connected" : "disconnected");
+        setNotionDatabaseId(data.databaseId ?? "");
+        setNotionWorkspaceName(data.workspaceName ?? "");
+        setNotionMessage(
+          data.connected
+            ? "Notionに接続済みです。この端末から登録できます。"
+            : oauthMessage || "Notion Database IDを入れて接続してください。",
+        );
+      } catch {
+        setNotionConnectionState("disconnected");
+        setNotionMessage("Notion接続を確認できませんでした。");
+      }
+    }
+
+    void checkNotionConnection();
+  }, [authState]);
 
   async function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -109,6 +157,41 @@ export default function Home() {
       setLoginMessage("通信に失敗しました。もう一度お試しください。");
     } finally {
       setIsLoggingIn(false);
+    }
+  }
+
+  function connectNotion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const databaseId = notionDatabaseId.trim();
+
+    if (!databaseId) {
+      setNotionMessage("Notion Database IDを入力してください。");
+      return;
+    }
+
+    setNotionMessage("Notionの認可画面へ移動します。");
+    window.location.href = `/api/notion/oauth/start?databaseId=${encodeURIComponent(databaseId)}`;
+  }
+
+  async function disconnectNotion() {
+    try {
+      setIsDisconnectingNotion(true);
+      const response = await fetch("/api/notion/connection", { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        setNotionMessage(data.error ?? "Notion接続の解除に失敗しました。");
+        return;
+      }
+
+      setNotionConnectionState("disconnected");
+      setNotionWorkspaceName("");
+      setNotionMessage("Notion接続を解除しました。");
+    } catch {
+      setNotionMessage("Notion接続の解除中に通信エラーが起きました。");
+    } finally {
+      setIsDisconnectingNotion(false);
     }
   }
 
@@ -350,6 +433,53 @@ export default function Home() {
       </header>
 
       <section className="rounded-[8px] border border-[#e2e6df] bg-white p-4 shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-[#1f7a5f]">Notion Connection</p>
+            <p className="mt-1 text-sm leading-6 text-[#3d453b]">
+              {notionConnectionState === "checking"
+                ? "Notion接続を確認しています。"
+                : notionWorkspaceName
+                  ? `${notionWorkspaceName} に接続済みです。`
+                  : notionMessage}
+            </p>
+          </div>
+          {notionConnectionState === "connected" ? (
+            <button
+              type="button"
+              onClick={disconnectNotion}
+              disabled={isDisconnectingNotion}
+              className="min-h-10 shrink-0 rounded-[8px] border border-[#cfd8cf] bg-[#f7f8f6] px-3 text-sm font-bold text-[#3d453b] active:scale-[0.99] disabled:text-[#8a9288]"
+            >
+              {isDisconnectingNotion ? "解除中" : "解除"}
+            </button>
+          ) : null}
+        </div>
+
+        {notionConnectionState !== "connected" ? (
+          <form onSubmit={connectNotion} className="mt-4 grid gap-3">
+            <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
+              Notion Database ID or URL
+              <input
+                value={notionDatabaseId}
+                onChange={(event) => setNotionDatabaseId(event.target.value)}
+                autoComplete="off"
+                placeholder="https://www.notion.so/... or 32文字ID"
+                className="min-h-12 rounded-[8px] border border-[#cfd8cf] bg-white px-3 text-base font-normal outline-none focus:border-[#1f7a5f] focus:ring-2 focus:ring-[#1f7a5f]/20"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={!notionDatabaseId.trim()}
+              className="min-h-12 rounded-[8px] bg-[#20231f] px-4 text-base font-bold text-white shadow-sm active:scale-[0.99] disabled:bg-[#9aa79e]"
+            >
+              Notionに接続
+            </button>
+          </form>
+        ) : null}
+      </section>
+
+      <section className="rounded-[8px] border border-[#e2e6df] bg-white p-4 shadow-sm">
         <div className="overflow-hidden rounded-[8px] border border-[#cfd8cf] bg-[#101612]">
           <video ref={videoRef} className="aspect-[4/3] w-full object-cover" muted playsInline />
         </div>
@@ -543,10 +673,10 @@ export default function Home() {
             <button
               type="button"
               onClick={registerBook}
-              disabled={isRegistering}
+              disabled={!canRegister}
               className="min-h-14 rounded-[8px] bg-[#e8a23a] px-4 text-lg font-black text-[#20231f] shadow-sm active:scale-[0.99] disabled:bg-[#d8c098]"
             >
-              {isRegistering ? "登録中..." : "Notionに登録"}
+              {isRegistering ? "登録中..." : notionConnectionState === "connected" ? "Notionに登録" : "Notion接続が必要"}
             </button>
           </div>
         </section>

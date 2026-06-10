@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/lib/auth";
 import { isValidIsbn, normalizeIsbn } from "@/app/lib/isbn";
 import { createBookPage, findBookByIsbn } from "@/app/lib/notion";
+import { getNotionConnection } from "@/app/lib/notionOAuth";
 import { rateLimit } from "@/app/lib/rateLimit";
 import { BookCreateInput } from "@/app/lib/types";
 
@@ -42,6 +43,15 @@ export async function POST(request: Request) {
       return unauthorized;
     }
 
+    const notionConnection = await getNotionConnection();
+
+    if (!notionConnection) {
+      return NextResponse.json(
+        { ok: false, error: "Notion連携が必要です。先にNotionへ接続してください。" },
+        { status: 428 },
+      );
+    }
+
     const body = (await request.json()) as Partial<BookCreateInput>;
     const isbn = normalizeIsbn(String(body.isbn ?? ""));
 
@@ -56,7 +66,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: "タイトルが空です。" }, { status: 400 });
     }
 
-    const existing = await findBookByIsbn(isbn);
+    const existing = await findBookByIsbn(isbn, notionConnection);
 
     if (existing) {
       return NextResponse.json({
@@ -67,18 +77,21 @@ export async function POST(request: Request) {
       });
     }
 
-    const page = await createBookPage({
-      title: String(body.title),
-      authors: stringArray(body.authors),
-      publisher: String(body.publisher ?? ""),
-      publishedDate: String(body.publishedDate ?? ""),
-      thumbnail: String(body.thumbnail ?? ""),
-      isbn,
-      whyBought: String(body.whyBought ?? ""),
-      tags: stringArray(body.tags),
-      storage: parseStorage(body.storage),
-      status: parseStatus(body.status),
-    });
+    const page = await createBookPage(
+      {
+        title: String(body.title),
+        authors: stringArray(body.authors),
+        publisher: String(body.publisher ?? ""),
+        publishedDate: String(body.publishedDate ?? ""),
+        thumbnail: String(body.thumbnail ?? ""),
+        isbn,
+        whyBought: String(body.whyBought ?? ""),
+        tags: stringArray(body.tags),
+        storage: parseStorage(body.storage),
+        status: parseStatus(body.status),
+      },
+      notionConnection,
+    );
 
     return NextResponse.json({ ok: true, notionUrl: page.url });
   } catch (error) {
