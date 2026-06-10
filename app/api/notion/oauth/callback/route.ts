@@ -11,7 +11,7 @@ import {
 import { rateLimit } from "@/app/lib/rateLimit";
 
 export async function GET(request: Request) {
-  const redirectUrl = new URL("/", request.url);
+  const redirectUrl = new URL("/", notionRedirectUri(request.url));
 
   try {
     const limited = rateLimit(request, "notion-oauth-callback", 20, 60 * 1000);
