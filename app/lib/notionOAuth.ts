@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "crypto";
 import { Client } from "@notionhq/client";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -24,6 +24,7 @@ export type NotionConnection = {
 type NotionOAuthState = {
   nonce: string;
   createdAt: string;
+  expiresAt: string;
 };
 
 type NotionTokenResponse = {
@@ -65,12 +66,31 @@ function encryptionKey(): Buffer {
   return createHash("sha256").update(cookieSecret()).digest();
 }
 
+function signingKey(): Buffer {
+  return createHash("sha256").update(`state:${cookieSecret()}`).digest();
+}
+
 function base64UrlEncode(buffer: Buffer): string {
   return buffer.toString("base64url");
 }
 
 function base64UrlDecode(value: string): Buffer {
   return Buffer.from(value, "base64url");
+}
+
+function signState(payload: string): string {
+  return createHmac("sha256", signingKey()).update(payload).digest("base64url");
+}
+
+function signaturesMatch(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 function encryptJson(value: unknown): string {
@@ -129,38 +149,38 @@ export function notionRedirectUri(requestUrl: string): string {
 }
 
 export async function setNotionOAuthState(response: NextResponse): Promise<string> {
-  const state = randomUUID();
   const value: NotionOAuthState = {
-    nonce: state,
+    nonce: randomUUID(),
     createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + stateMaxAge * 1000).toISOString(),
   };
+  const payload = base64UrlEncode(Buffer.from(JSON.stringify(value), "utf8"));
+  const signature = signState(payload);
 
-  response.cookies.set(stateCookieName, encryptJson(value), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: secureCookie(),
-    maxAge: stateMaxAge,
-    path: "/",
-  });
+  clearNotionOAuthState(response);
 
-  return state;
+  return `${payload}.${signature}`;
 }
 
 export async function readNotionOAuthState(expectedState: string): Promise<NotionOAuthState | null> {
-  const cookieStore = await cookies();
-  const encrypted = cookieStore.get(stateCookieName)?.value;
+  const [payload, signature] = expectedState.split(".");
 
-  if (!encrypted) {
+  if (!payload || !signature || !signaturesMatch(signState(payload), signature)) {
     return null;
   }
 
-  const state = decryptJson<NotionOAuthState>(encrypted);
+  try {
+    const state = JSON.parse(base64UrlDecode(payload).toString("utf8")) as NotionOAuthState;
+    const expiresAt = Date.parse(state.expiresAt);
 
-  if (!state || state.nonce !== expectedState) {
+    if (!state.nonce || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
+      return null;
+    }
+
+    return state;
+  } catch {
     return null;
   }
-
-  return state;
 }
 
 export function clearNotionOAuthState(response: NextResponse): void {
