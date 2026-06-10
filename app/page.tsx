@@ -63,9 +63,9 @@ export default function Home() {
   const [loginMessage, setLoginMessage] = useState("合言葉を入れると登録画面を開けます。");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [notionConnectionState, setNotionConnectionState] = useState<NotionConnectionState>("checking");
-  const [notionDatabaseId, setNotionDatabaseId] = useState("");
+  const [notionDatabaseTitle, setNotionDatabaseTitle] = useState("");
   const [notionWorkspaceName, setNotionWorkspaceName] = useState("");
-  const [notionMessage, setNotionMessage] = useState("Notion Database IDを入れて接続してください。");
+  const [notionMessage, setNotionMessage] = useState("Notionでログインしてください。");
   const [isDisconnectingNotion, setIsDisconnectingNotion] = useState(false);
 
   const normalizedIsbn = useMemo(() => normalizeIsbn(isbn), [isbn]);
@@ -115,12 +115,12 @@ export default function Home() {
         }
 
         setNotionConnectionState(data.connected ? "connected" : "disconnected");
-        setNotionDatabaseId(data.databaseId ?? "");
+        setNotionDatabaseTitle(data.databaseTitle ?? "");
         setNotionWorkspaceName(data.workspaceName ?? "");
         setNotionMessage(
           data.connected
             ? "Notionに接続済みです。この端末から登録できます。"
-            : oauthMessage || "Notion Database IDを入れて接続してください。",
+            : oauthMessage || "Notionでログインしてください。",
         );
       } catch {
         setNotionConnectionState("disconnected");
@@ -160,18 +160,9 @@ export default function Home() {
     }
   }
 
-  function connectNotion(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const databaseId = notionDatabaseId.trim();
-
-    if (!databaseId) {
-      setNotionMessage("Notion Database IDを入力してください。");
-      return;
-    }
-
+  function connectNotion() {
     setNotionMessage("Notionの認可画面へ移動します。");
-    window.location.href = `/api/notion/oauth/start?databaseId=${encodeURIComponent(databaseId)}`;
+    window.location.href = "/api/notion/oauth/start";
   }
 
   async function disconnectNotion() {
@@ -187,6 +178,7 @@ export default function Home() {
 
       setNotionConnectionState("disconnected");
       setNotionWorkspaceName("");
+      setNotionDatabaseTitle("");
       setNotionMessage("Notion接続を解除しました。");
     } catch {
       setNotionMessage("Notion接続の解除中に通信エラーが起きました。");
@@ -439,8 +431,8 @@ export default function Home() {
             <p className="mt-1 text-sm leading-6 text-[#3d453b]">
               {notionConnectionState === "checking"
                 ? "Notion接続を確認しています。"
-                : notionWorkspaceName
-                  ? `${notionWorkspaceName} に接続済みです。`
+                : notionConnectionState === "connected"
+                  ? `${notionWorkspaceName || "Notion"} / ${notionDatabaseTitle || "Library"} に接続済みです。`
                   : notionMessage}
             </p>
           </div>
@@ -457,25 +449,13 @@ export default function Home() {
         </div>
 
         {notionConnectionState !== "connected" ? (
-          <form onSubmit={connectNotion} className="mt-4 grid gap-3">
-            <label className="grid gap-2 text-sm font-bold text-[#3d453b]">
-              Notion Database ID or URL
-              <input
-                value={notionDatabaseId}
-                onChange={(event) => setNotionDatabaseId(event.target.value)}
-                autoComplete="off"
-                placeholder="https://www.notion.so/... or 32文字ID"
-                className="min-h-12 rounded-[8px] border border-[#cfd8cf] bg-white px-3 text-base font-normal outline-none focus:border-[#1f7a5f] focus:ring-2 focus:ring-[#1f7a5f]/20"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={!notionDatabaseId.trim()}
-              className="min-h-12 rounded-[8px] bg-[#20231f] px-4 text-base font-bold text-white shadow-sm active:scale-[0.99] disabled:bg-[#9aa79e]"
-            >
-              Notionに接続
-            </button>
-          </form>
+          <button
+            type="button"
+            onClick={connectNotion}
+            className="mt-4 min-h-12 w-full rounded-[8px] bg-[#20231f] px-4 text-base font-bold text-white shadow-sm active:scale-[0.99]"
+          >
+            Notionでログイン
+          </button>
         ) : null}
       </section>
 

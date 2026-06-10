@@ -14,6 +14,8 @@ export async function GET() {
   return NextResponse.json({
     connected: Boolean(connection),
     databaseId: connection?.databaseId ?? "",
+    databaseTitle: connection?.databaseTitle ?? "",
+    notionUserId: connection?.notionUserId ?? "",
     workspaceName: connection?.workspaceName ?? "",
     workspaceIcon: connection?.workspaceIcon ?? "",
   });
@@ -30,4 +32,3 @@ export async function POST() {
   clearNotionConnection(response);
   return response;
 }
-

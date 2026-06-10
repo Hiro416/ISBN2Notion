@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/app/lib/auth";
-import { normalizeNotionDatabaseId, notionClientId, notionRedirectUri, setNotionOAuthState } from "@/app/lib/notionOAuth";
+import { notionClientId, notionRedirectUri, setNotionOAuthState } from "@/app/lib/notionOAuth";
 import { rateLimit } from "@/app/lib/rateLimit";
 
 export async function GET(request: Request) {
@@ -17,10 +17,8 @@ export async function GET(request: Request) {
       return unauthorized;
     }
 
-    const url = new URL(request.url);
-    const databaseId = normalizeNotionDatabaseId(url.searchParams.get("databaseId") ?? "");
     const response = NextResponse.redirect(new URL("/", request.url));
-    const state = await setNotionOAuthState(response, databaseId);
+    const state = await setNotionOAuthState(response);
     const authorizeUrl = new URL("https://api.notion.com/v1/oauth/authorize");
 
     authorizeUrl.searchParams.set("client_id", notionClientId());
@@ -38,4 +36,3 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: message }, { status: 400 });
   }
 }
-

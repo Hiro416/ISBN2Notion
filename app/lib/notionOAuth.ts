@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from "crypto";
+import { Client } from "@notionhq/client";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
@@ -15,12 +16,13 @@ export type NotionConnection = {
   workspaceName: string;
   workspaceIcon: string;
   databaseId: string;
+  databaseTitle: string;
+  notionUserId: string;
   createdAt: string;
 };
 
 type NotionOAuthState = {
   nonce: string;
-  databaseId: string;
   createdAt: string;
 };
 
@@ -31,8 +33,22 @@ type NotionTokenResponse = {
   workspace_id?: unknown;
   workspace_name?: unknown;
   workspace_icon?: unknown;
+  owner?: unknown;
   error?: unknown;
   error_description?: unknown;
+};
+
+type NotionDatabaseCandidate = {
+  object?: unknown;
+  id?: unknown;
+  title?: unknown;
+  properties?: unknown;
+};
+
+type NotionSearchResponse = {
+  results?: unknown;
+  has_more?: unknown;
+  next_cursor?: unknown;
 };
 
 function cookieSecret(): string {
@@ -112,25 +128,10 @@ export function notionRedirectUri(requestUrl: string): string {
   return process.env.NOTION_OAUTH_REDIRECT_URI || `${new URL(requestUrl).origin}/api/notion/oauth/callback`;
 }
 
-export function normalizeNotionDatabaseId(input: string): string {
-  const trimmed = input.trim();
-  const urlMatch = trimmed.match(/[0-9a-f]{32}/i);
-  const uuidMatch = trimmed.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-  const candidate = uuidMatch?.[0] ?? urlMatch?.[0] ?? trimmed;
-  const normalized = candidate.replaceAll("-", "");
-
-  if (!/^[0-9a-f]{32}$/i.test(normalized)) {
-    throw new Error("Notion Database IDの形式が正しくありません。");
-  }
-
-  return normalized;
-}
-
-export async function setNotionOAuthState(response: NextResponse, databaseId: string): Promise<string> {
+export async function setNotionOAuthState(response: NextResponse): Promise<string> {
   const state = randomUUID();
   const value: NotionOAuthState = {
     nonce: state,
-    databaseId,
     createdAt: new Date().toISOString(),
   };
 
@@ -233,4 +234,105 @@ export async function exchangeNotionCode(code: string, redirectUri: string): Pro
   }
 
   return data;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function propertyType(properties: Record<string, unknown>, name: string): string {
+  const property = objectRecord(properties[name]);
+
+  return typeof property?.type === "string" ? property.type : "";
+}
+
+function hasLibrarySchema(candidate: NotionDatabaseCandidate): boolean {
+  const properties = objectRecord(candidate.properties);
+
+  if (!properties) {
+    return false;
+  }
+
+  return (
+    propertyType(properties, "Title") === "title" &&
+    propertyType(properties, "Author") === "rich_text" &&
+    propertyType(properties, "Category") === "rich_text" &&
+    propertyType(properties, "Cover") === "files" &&
+    propertyType(properties, "ISBN") === "number" &&
+    propertyType(properties, "Published") === "date" &&
+    propertyType(properties, "Storage") === "select" &&
+    propertyType(properties, "memo") === "rich_text" &&
+    propertyType(properties, "状態") === "select"
+  );
+}
+
+function databaseTitle(candidate: NotionDatabaseCandidate): string {
+  if (!Array.isArray(candidate.title)) {
+    return "Notion database";
+  }
+
+  const title = candidate.title
+    .map((item) => objectRecord(item)?.plain_text)
+    .filter((value): value is string => typeof value === "string")
+    .join("");
+
+  return title || "Notion database";
+}
+
+function ownerUserId(owner: unknown): string {
+  const ownerRecord = objectRecord(owner);
+
+  if (!ownerRecord) {
+    return "";
+  }
+
+  const user = objectRecord(ownerRecord.user);
+
+  return typeof user?.id === "string" ? user.id : "";
+}
+
+export function notionUserIdFromToken(token: NotionTokenResponse): string {
+  return ownerUserId(token.owner);
+}
+
+export async function findLibraryDatabase(accessToken: string): Promise<{ id: string; title: string }> {
+  const notion = new Client({ auth: accessToken });
+  let cursor: string | undefined;
+
+  do {
+    const response = (await notion.search({
+      filter: {
+        property: "object",
+        value: "database",
+      },
+      page_size: 100,
+      start_cursor: cursor,
+    })) as NotionSearchResponse;
+    const results = Array.isArray(response.results) ? response.results : [];
+
+    for (const result of results) {
+      const candidate = objectRecord(result) as NotionDatabaseCandidate | null;
+
+      if (
+        candidate?.object === "database" &&
+        typeof candidate.id === "string" &&
+        hasLibrarySchema(candidate)
+      ) {
+        return {
+          id: candidate.id.replaceAll("-", ""),
+          title: databaseTitle(candidate),
+        };
+      }
+    }
+
+    cursor = typeof response.next_cursor === "string" ? response.next_cursor : undefined;
+  } while (cursor);
+
+  throw new Error(
+    "ISBN2Notion用のDatabaseを見つけられませんでした。Notionの認可画面で、必要なプロパティを持つDatabaseを選択してください。",
+  );
 }

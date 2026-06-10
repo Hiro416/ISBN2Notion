@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import {
   clearNotionOAuthState,
   exchangeNotionCode,
+  findLibraryDatabase,
   notionRedirectUri,
+  notionUserIdFromToken,
   readNotionOAuthState,
   setNotionConnection,
 } from "@/app/lib/notionOAuth";
@@ -43,6 +45,7 @@ export async function GET(request: Request) {
       throw new Error("Notion OAuthのアクセストークンを取得できませんでした。");
     }
 
+    const database = await findLibraryDatabase(token.access_token);
     const response = NextResponse.redirect(redirectUrl);
     setNotionConnection(response, {
       accessToken: token.access_token,
@@ -51,7 +54,9 @@ export async function GET(request: Request) {
       workspaceId: typeof token.workspace_id === "string" ? token.workspace_id : "",
       workspaceName: typeof token.workspace_name === "string" ? token.workspace_name : "",
       workspaceIcon: typeof token.workspace_icon === "string" ? token.workspace_icon : "",
-      databaseId: state.databaseId,
+      databaseId: database.id,
+      databaseTitle: database.title,
+      notionUserId: notionUserIdFromToken(token),
       createdAt: new Date().toISOString(),
     });
     clearNotionOAuthState(response);
