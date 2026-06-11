@@ -34,6 +34,7 @@ type NotionTokenResponse = {
   workspace_id?: unknown;
   workspace_name?: unknown;
   workspace_icon?: unknown;
+  duplicated_template_id?: unknown;
   owner?: unknown;
   error?: unknown;
   error_description?: unknown;
@@ -43,6 +44,7 @@ type NotionDatabaseCandidate = {
   object?: unknown;
   id?: unknown;
   title?: unknown;
+  parent?: unknown;
   properties?: unknown;
 };
 
@@ -270,6 +272,10 @@ function propertyType(properties: Record<string, unknown>, name: string): string
   return typeof property?.type === "string" ? property.type : "";
 }
 
+function normalizeNotionId(value: string): string {
+  return value.replaceAll("-", "");
+}
+
 function hasLibrarySchema(candidate: NotionDatabaseCandidate): boolean {
   const properties = objectRecord(candidate.properties);
 
@@ -303,6 +309,22 @@ function databaseTitle(candidate: NotionDatabaseCandidate): string {
   return title || "Notion database";
 }
 
+function candidateParentId(candidate: NotionDatabaseCandidate): string {
+  const parent = objectRecord(candidate.parent);
+  const pageId = parent?.page_id;
+  const databaseId = parent?.database_id;
+
+  if (typeof pageId === "string") {
+    return normalizeNotionId(pageId);
+  }
+
+  if (typeof databaseId === "string") {
+    return normalizeNotionId(databaseId);
+  }
+
+  return "";
+}
+
 function ownerUserId(owner: unknown): string {
   const ownerRecord = objectRecord(owner);
 
@@ -319,38 +341,75 @@ export function notionUserIdFromToken(token: NotionTokenResponse): string {
   return ownerUserId(token.owner);
 }
 
-export async function findLibraryDatabase(accessToken: string): Promise<{ id: string; title: string }> {
+export function duplicatedTemplateIdFromToken(token: NotionTokenResponse): string {
+  return typeof token.duplicated_template_id === "string" ? normalizeNotionId(token.duplicated_template_id) : "";
+}
+
+function databaseResult(candidate: NotionDatabaseCandidate): { id: string; title: string } | null {
+  if (candidate.object !== "database" || typeof candidate.id !== "string" || !hasLibrarySchema(candidate)) {
+    return null;
+  }
+
+  return {
+    id: normalizeNotionId(candidate.id),
+    title: databaseTitle(candidate),
+  };
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+export async function findLibraryDatabase(
+  accessToken: string,
+  duplicatedTemplateId = "",
+): Promise<{ id: string; title: string }> {
   const notion = new Client({ auth: accessToken });
-  let cursor: string | undefined;
+  const preferredId = duplicatedTemplateId ? normalizeNotionId(duplicatedTemplateId) : "";
 
-  do {
-    const response = (await notion.search({
-      filter: {
-        property: "object",
-        value: "database",
-      },
-      page_size: 100,
-      start_cursor: cursor,
-    })) as NotionSearchResponse;
-    const results = Array.isArray(response.results) ? response.results : [];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    let cursor: string | undefined;
+    let fallback: { id: string; title: string } | null = null;
 
-    for (const result of results) {
-      const candidate = objectRecord(result) as NotionDatabaseCandidate | null;
+    do {
+      const response = (await notion.search({
+        filter: {
+          property: "object",
+          value: "database",
+        },
+        page_size: 100,
+        start_cursor: cursor,
+      })) as NotionSearchResponse;
+      const results = Array.isArray(response.results) ? response.results : [];
 
-      if (
-        candidate?.object === "database" &&
-        typeof candidate.id === "string" &&
-        hasLibrarySchema(candidate)
-      ) {
-        return {
-          id: candidate.id.replaceAll("-", ""),
-          title: databaseTitle(candidate),
-        };
+      for (const result of results) {
+        const candidate = objectRecord(result) as NotionDatabaseCandidate | null;
+        const database = candidate ? databaseResult(candidate) : null;
+
+        if (!candidate || !database) {
+          continue;
+        }
+
+        if (preferredId && (database.id === preferredId || candidateParentId(candidate) === preferredId)) {
+          return database;
+        }
+
+        if (!fallback) {
+          fallback = database;
+        }
       }
+
+      cursor = typeof response.next_cursor === "string" ? response.next_cursor : undefined;
+    } while (cursor);
+
+    if (fallback) {
+      return fallback;
     }
 
-    cursor = typeof response.next_cursor === "string" ? response.next_cursor : undefined;
-  } while (cursor);
+    await delay(500 * (attempt + 1));
+  }
 
   throw new Error(
     "ISBN2Notion用のDatabaseを見つけられませんでした。Notionの認可画面で、必要なプロパティを持つDatabaseを選択してください。",

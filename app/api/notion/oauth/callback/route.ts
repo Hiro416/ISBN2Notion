@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   clearNotionOAuthState,
+  duplicatedTemplateIdFromToken,
   exchangeNotionCode,
   findLibraryDatabase,
   notionRedirectUri,
@@ -45,7 +46,7 @@ export async function GET(request: Request) {
       throw new Error("Notion OAuthのアクセストークンを取得できませんでした。");
     }
 
-    const database = await findLibraryDatabase(token.access_token);
+    const database = await findLibraryDatabase(token.access_token, duplicatedTemplateIdFromToken(token));
     const response = NextResponse.redirect(redirectUrl);
     setNotionConnection(response, {
       accessToken: token.access_token,
