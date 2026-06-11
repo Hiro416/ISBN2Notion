@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -34,7 +35,32 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ja">
-      <body>{children}</body>
+      <body>
+        {children}
+        <Script src="https://storage.ko-fi.com/cdn/scripts/overlay-widget.js" strategy="afterInteractive" />
+        <Script id="kofi-widget" strategy="afterInteractive">
+          {`
+            (function drawKofiWidget() {
+              if (window.__isbn2notionKofiLoaded) {
+                return;
+              }
+
+              if (!window.kofiWidgetOverlay) {
+                window.setTimeout(drawKofiWidget, 300);
+                return;
+              }
+
+              window.__isbn2notionKofiLoaded = true;
+              window.kofiWidgetOverlay.draw('hayahiro', {
+                'type': 'floating-chat',
+                'floating-chat.donateButton.text': 'Tip Me',
+                'floating-chat.donateButton.background-color': '#ffffff',
+                'floating-chat.donateButton.text-color': '#323842'
+              });
+            })();
+          `}
+        </Script>
+      </body>
     </html>
   );
 }
