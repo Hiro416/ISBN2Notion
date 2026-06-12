@@ -377,6 +377,14 @@ export default function Home() {
           <p className="mt-3 text-sm leading-6 text-[#697066]">
             {authState === "checking" ? "ログイン状態を確認しています。" : loginMessage}
           </p>
+          <a
+            href="/usage"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 inline-flex min-h-10 items-center rounded-[8px] border border-[#cfd8cf] bg-[#f7f8f6] px-3 text-sm font-bold text-[#3d453b]"
+          >
+            使い方を見る
+          </a>
 
           {authState === "unauthenticated" ? (
             <form onSubmit={login} className="mt-5 grid gap-3">
@@ -411,17 +419,27 @@ export default function Home() {
           <p className="text-sm font-bold text-[#1f7a5f]">Personal Library PWA</p>
           <h1 className="mt-1 text-3xl font-black leading-tight text-[#20231f]">ISBN2Notion</h1>
         </div>
-        <button
-          type="button"
-          onClick={startNewBook}
-          aria-label="新しい本を登録"
-          title="新しい本を登録"
-          className="grid h-14 w-14 place-items-center rounded-[8px] border border-[#d8ded5] bg-white shadow-sm active:scale-[0.98]"
-        >
-          <span className="text-2xl" aria-hidden="true">
-            +
-          </span>
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <a
+            href="/usage"
+            target="_blank"
+            rel="noreferrer"
+            className="grid h-14 place-items-center rounded-[8px] border border-[#d8ded5] bg-white px-3 text-sm font-bold text-[#3d453b] shadow-sm active:scale-[0.98]"
+          >
+            使い方
+          </a>
+          <button
+            type="button"
+            onClick={startNewBook}
+            aria-label="新しい本を登録"
+            title="新しい本を登録"
+            className="grid h-14 w-14 place-items-center rounded-[8px] border border-[#d8ded5] bg-white shadow-sm active:scale-[0.98]"
+          >
+            <span className="text-2xl" aria-hidden="true">
+              +
+            </span>
+          </button>
+        </div>
       </header>
 
       <section className="rounded-[8px] border border-[#e2e6df] bg-white p-4 shadow-sm">
