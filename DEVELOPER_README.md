@@ -105,7 +105,7 @@ Input:
 { "isbn": "978..." }
 ```
 
-openBDで検索し、見つからない場合は国立国会図書館サーチ、Google Books API、Open Library APIの順に試します。日本語の商業出版物はopenBDと国立国会図書館サーチで見つかることが多いです。
+国立国会図書館サーチで検索し、見つからない場合はopenBD、Google Books API、Open Library APIの順に試します。日本語の商業出版物は国立国会図書館サーチとopenBDで見つかることが多いです。
 書影が取得できない国内ISBNでは `https://img.hanmoto.com/bd/img/{ISBN}.jpg` を補完します。画像が存在しない場合は画面上で `NO COVER` 表示に戻ります。
 
 Output:

@@ -282,7 +282,7 @@ export default function Home() {
       setIsLookingUp(true);
       setBook(null);
       setCoverFailed(false);
-      setMessage("書誌情報を探しています。openBD、NDL、Google Booksを順番に見ています。");
+      setMessage("書誌情報を探しています。NDL、openBD、Google Booksを順番に見ています。");
 
       const response = await fetch("/api/lookup", {
         method: "POST",

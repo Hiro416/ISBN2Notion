@@ -68,16 +68,16 @@ function chooseGoogleIsbn(item: GoogleBookItem, fallback: string): string {
 }
 
 export async function lookupBook(isbn: string): Promise<BookLookup | null> {
-  const openBdBook = await lookupOpenBd(isbn);
-
-  if (openBdBook) {
-    return openBdBook;
-  }
-
   const ndlBook = await lookupNationalDietLibrary(isbn);
 
   if (ndlBook) {
     return ndlBook;
+  }
+
+  const openBdBook = await lookupOpenBd(isbn);
+
+  if (openBdBook) {
+    return openBdBook;
   }
 
   const googleBook = await lookupGoogleBooks(isbn);
